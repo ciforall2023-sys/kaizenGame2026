@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kaizen Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --floor:#DADDE0; --panel:#F6F7F8; --ink:#1E2933; --muted:#5B6873;
+  --tape:#F0B91A; --run:#2F9A5A; --warn:#E39A14; --stop:#CF3A2C; --idle:#9AA4AD; --steel:#2F4A60;
+  --slot:#C3C8CD; --metal:#7D8A96; --box:#C4945A; --belt:#4A545D; --belt2:#5B666F;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --floor:#1C2126; --panel:#272D33; --ink:#E7EBEE; --muted:#9AA6B0;
+    --tape:#E5B020; --run:#45B873; --warn:#F0A830; --stop:#E5574A; --idle:#66717B; --steel:#8FB0CC;
+    --slot:#353D44; --metal:#A3AFBA; --box:#C99D66; --belt:#151A1E; --belt2:#242B31;
+  }
+}
+:root[data-theme="dark"]{
+  --floor:#1C2126; --panel:#272D33; --ink:#E7EBEE; --muted:#9AA6B0;
+  --tape:#E5B020; --run:#45B873; --warn:#F0A830; --stop:#E5574A; --idle:#66717B; --steel:#8FB0CC;
+  --slot:#353D44; --metal:#A3AFBA; --box:#C99D66; --belt:#151A1E; --belt2:#242B31;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  height:100%;margin:0;background:var(--floor);color:var(--ink);
+  font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-tap-highlight-color:transparent;overflow:hidden;
+  display:flex;flex-direction:column;max-width:520px;margin-inline:auto;position:relative;
+  user-select:none;-webkit-user-select:none;
+}
+button{font:inherit;color:inherit;touch-action:manipulation}
+button:focus-visible{outline:3px solid var(--tape);outline-offset:2px}
+.cond{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700}
+
+/* Shift status bar */
+.shiftbar{background:var(--panel);padding:8px 12px 10px;border-bottom:4px solid var(--tape)}
+.sb-row{display:flex;align-items:center;gap:10px}
+.sb-shift{font-size:1.2rem;white-space:nowrap}
+.pips{display:flex;gap:3px;flex:1}
+.pip{flex:1;height:10px;border-radius:2px;background:var(--slot)}
+.pip.met{background:var(--run)}
+.pip.miss{background:var(--stop)}
+.pip.now{background:transparent;box-shadow:inset 0 0 0 2px var(--tape)}
+.timer{font-size:1.35rem;min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.timer.low{color:var(--stop)}
+.pause{border:0;background:var(--floor);width:38px;height:38px;border-radius:9px;font-size:1rem;flex-shrink:0}
+.sb-row2{margin-top:8px}
+.quota{position:relative;flex:1;height:24px;border-radius:6px;background:var(--slot);overflow:hidden}
+.q-fill{position:absolute;inset:0;background:color-mix(in srgb,var(--steel) 45%,var(--slot));transform-origin:left;transform:scaleX(0);transition:transform .25s}
+.quota.done .q-fill{background:color-mix(in srgb,var(--run) 55%,var(--slot))}
+.q-text{position:absolute;inset:0;display:flex;align-items:center;padding-left:8px;font-size:.82rem;font-weight:600;color:var(--ink)}
+.mini{text-align:right;line-height:1}
+.mini b{font-size:1.1rem;display:block}
+.mini span{font-size:.68rem;color:var(--muted)}
+.mini.bad b{color:var(--stop)}
+.slot.bad svg rect{fill:var(--stop)}
+.station.supplier{border:2px dashed var(--steel)}
+.supplier .st-icon{color:var(--steel)}
+.supplier.late .st-icon{color:var(--warn)}
+.supplier.down .st-icon{color:var(--stop)}
+.supplier.late .andon .a{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.supplier.ok .andon .g{background:var(--run);box-shadow:0 0 6px var(--run)}
+.supplier.late .st-status{color:var(--ink);font-weight:600}
+.supplier .st-bar i{background:var(--steel)}
+.deliver{animation:deliver .5s}
+@keyframes deliver{0%{background:color-mix(in srgb,var(--steel) 22%,var(--panel))}}
+
+/* Line */
+.line{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;padding:4px 12px;min-height:0}
+
+.lane{display:flex;align-items:center;gap:8px;margin-inline:14px;height:34px}
+.lane-label{font-size:.7rem;color:var(--muted);width:58px;flex-shrink:0;line-height:1.1}
+.belt{flex:1;display:flex;gap:4px;padding:3px 4px;border-radius:5px;
+  background:repeating-linear-gradient(90deg,var(--belt) 0 7px,var(--belt2) 7px 14px);background-size:14px 100%}
+.lane.moving .belt{animation:belt .7s linear infinite}
+@keyframes belt{to{background-position:14px 0}}
+.slot{flex:1;height:24px;display:flex;align-items:center;justify-content:center;border-bottom:3px solid var(--run)}
+.slot.z2{border-bottom-color:var(--warn)}
+.slot.z3{border-bottom-color:var(--stop)}
+.slot svg{width:22px;height:22px;opacity:0;transform:scale(.6);transition:opacity .12s,transform .12s}
+.slot.on svg{opacity:1;transform:scale(1)}
+.kb{flex-shrink:0;min-width:40px;text-align:center;padding:3px 5px;border-radius:4px;color:#fff;font-size:.9rem;background:var(--run);line-height:1.1}
+.kb small{display:block;font-family:"Barlow",sans-serif;font-weight:500;font-size:.58rem;opacity:.9}
+.kb.z2{background:var(--warn)}
+.kb.z3{background:var(--stop)}
+
+.station{
+  position:relative;display:grid;grid-template-columns:48px 1fr auto;grid-template-rows:auto auto auto;column-gap:10px;row-gap:3px;align-items:center;
+  width:100%;text-align:left;border:0;border-radius:10px;background:var(--panel);padding:8px 10px;cursor:pointer;
+}
+.st-icon{grid-column:1;grid-row:1/3;width:48px;height:48px;border-radius:10px;background:var(--floor);display:flex;align-items:center;justify-content:center;color:var(--steel)}
+.st-icon svg{width:34px;height:34px;overflow:visible}
+.st-head{grid-column:2;grid-row:1;display:flex;align-items:baseline;gap:8px}
+.st-name{font-size:1.3rem;line-height:1}
+.st-ct{font-weight:600;font-size:.85rem;color:var(--muted)}
+.st-status{grid-column:2;grid-row:2;font-size:.8rem;color:var(--muted);line-height:1.1}
+.station.down .st-status,.station.defect .st-status{color:var(--ink);font-weight:600}
+.andon{grid-column:3;grid-row:1/3;align-self:center;display:flex;flex-direction:column;gap:3px;padding:4px 5px;border-radius:6px;background:var(--floor)}
+.andon i{width:10px;height:10px;border-radius:50%;background:var(--slot)}
+.station.down .andon .r{background:var(--stop);box-shadow:0 0 6px var(--stop)}
+.station.defect .andon .a{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.station.run .andon .g{background:var(--run);box-shadow:0 0 6px var(--run)}
+.st-bar{grid-column:1/-1;grid-row:3;margin-top:4px;height:5px;background:var(--slot);border-radius:3px;overflow:hidden}
+.st-bar i{display:block;height:100%;width:100%;background:var(--run);transform-origin:left;transform:scaleX(0)}
+.station.defect .st-bar i{background:var(--warn)}
+.station.down{animation:pulse 1s infinite}
+.station.down .st-icon{color:var(--stop)}
+.station.defect .st-icon{color:var(--warn)}
+.station.pick{box-shadow:0 0 0 3px var(--tape)}
+@keyframes pulse{50%{background:color-mix(in srgb,var(--stop) 14%,var(--panel))}}
+.scrap-flash{animation:scrap .4s}
+@keyframes scrap{0%{background:color-mix(in srgb,var(--warn) 35%,var(--panel))}}
+
+/* Machine motion */
+.spin,.spin-rev{transform-box:fill-box;transform-origin:center}
+.needle{transform-box:view-box;transform-origin:12px 17px;transform:rotate(-50deg)}
+.spark{opacity:0}
+.station.run .spin{animation:spin 1s linear infinite}
+.station.run .spin-rev{animation:spin .7s linear infinite reverse}
+.station.run .spark{animation:flick .18s steps(2) infinite}
+.station.run .needle{animation:sweep 1.1s ease-in-out infinite alternate}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes flick{0%{opacity:1}50%{opacity:.2}}
+@keyframes sweep{to{transform:rotate(45deg)}}
+
+/* Dock */
+.dock{display:flex;align-items:center;gap:10px;padding:2px 14px 0}
+.dock svg{width:58px;height:34px;flex-shrink:0}
+.dock-text{font-size:.82rem;color:var(--muted);line-height:1.2}
+.dock-text b{color:var(--ink);font-weight:600}
+
+/* Footer */
+.foot{padding:8px 12px 12px}
+.kaizen{width:100%;border:0;border-radius:12px;height:50px;background:var(--steel);color:var(--panel);font-size:1.25rem}
+.kaizen:disabled{opacity:.45}
+.kaizen.active{background:var(--tape);color:#1E2933}
+
+/* Toast */
+.toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 96px);transform:translate(-50%,-8px);
+  background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:.9rem;font-weight:500;
+  opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:88%;text-align:center;z-index:5}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Overlays */
+.overlay{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:20px;
+  background:color-mix(in srgb,var(--floor) 82%,transparent);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:10;overflow-y:auto}
+.overlay[hidden]{display:none}
+.card{margin:auto;background:var(--panel);border-radius:14px;padding:22px 20px;max-width:390px;width:100%;border-top:8px solid var(--tape)}
+.card h1{font-size:3rem;line-height:.95;margin:0 0 10px;letter-spacing:-.01em}
+.card h2{font-size:2.1rem;line-height:1;margin:0 0 12px}
+.card p{margin:0 0 12px;line-height:1.45}
+.legend{display:grid;grid-template-columns:30px 1fr;gap:8px 10px;align-items:center;margin:0 0 16px;font-size:.92rem;line-height:1.35}
+.legend .ico{width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+.legend .ico svg{width:26px;height:26px}
+.dot{width:14px;height:14px;border-radius:50%;display:inline-block}
+.results{display:grid;grid-template-columns:repeat(3,1fr);row-gap:14px;gap:8px;margin:0 0 14px}
+.results b{display:block;font-size:1.6rem;line-height:1}
+.results span{font-size:.76rem;color:var(--muted)}
+.card .pips{margin:0 0 14px}
+.card .pip{height:14px}
+.cta{width:100%;border:0;border-radius:12px;height:52px;background:var(--steel);color:var(--panel);font-size:1.3rem}
+.tip{font-size:.88rem;color:var(--muted)}
+
+.card.alert{border-top-color:var(--stop)}
+.q-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.q-icon{width:52px;height:52px;border-radius:10px;background:var(--floor);color:var(--stop);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.q-icon svg{width:36px;height:36px}
+.q-head h2{margin:0;font-size:1.9rem}
+.q-head span{font-size:.8rem;color:var(--muted)}
+.q-scn{font-size:.95rem;color:var(--muted);margin:0 0 8px}
+.q-q{font-weight:600;margin:0 0 12px;font-size:1.02rem}
+.opt{display:block;width:100%;text-align:left;border:2px solid var(--slot);background:var(--panel);border-radius:10px;padding:11px 12px;margin:0 0 8px;font-size:.95rem;line-height:1.3;cursor:pointer}
+.opt:disabled{cursor:default}
+.opt.wrong{border-color:var(--stop);background:color-mix(in srgb,var(--stop) 10%,var(--panel));color:var(--muted)}
+.opt.right{border-color:var(--run);background:color-mix(in srgb,var(--run) 15%,var(--panel));font-weight:600}
+.fb{border-left:5px solid var(--stop);background:var(--floor);padding:10px 12px;border-radius:6px;margin:4px 0 12px;font-size:.9rem;line-height:1.45}
+.fb.ok{border-left-color:var(--run)}
+.fb b{display:block;margin-bottom:2px}
+.fb .cost{display:block;margin-top:6px;color:var(--stop);font-weight:600;font-size:.82rem}
+.fb .bonus{display:block;margin-top:6px;color:var(--run);font-weight:600;font-size:.85rem}
+.fb[hidden],.cta[hidden]{display:none}
+@media (prefers-reduced-motion: reduce){
+  .station.down,.scrap-flash,.lane.moving .belt,.station.run .spin,.station.run .spin-rev,.station.run .needle{animation:none}
+  .station.run .spark{animation:none;opacity:1}
+  .toast,.q-fill{transition:none}
+}
+</style>
+</head>
+<body>
+<header class="shiftbar">
+  <div class="sb-row">
+    <span class="sb-shift cond" id="shiftLabel">Shift 1 of 3</span>
+    <div class="pips" id="pips"></div>
+    <span class="timer cond" id="timer">0:45</span>
+    <button class="pause" id="pauseBtn" aria-label="Pause">❚❚</button>
+  </div>
+  <div class="sb-row sb-row2">
+    <div class="quota" id="quota"><div class="q-fill" id="qFill"></div><span class="q-text" id="qText">0 of 15 shipped</span></div>
+    <div class="mini" id="fpyBox"><b class="cond" id="fpy">100%</b><span>FPY last 20</span></div>
+    <div class="mini" id="otdBox"><b class="cond" id="otd">100%</b><span>Supplier OTD</span></div>
+  </div>
+</header>
+
+<main class="line" id="line"></main>
+
+<footer class="foot">
+  <button class="kaizen cond" id="kaizenBtn" disabled>Kaizen points: 0</button>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="overlay" id="startOv">
+  <div class="card">
+    <h1 class="cond">Kaizen Line</h1>
+    <p>Run 3 shifts of 45 seconds. A supplier feeds bar stock into three stations, and each shift has a rising shipping target.</p>
+    <div class="legend" id="legend"></div>
+    <button class="cta cond" id="startBtn">Start shift 1</button>
+  </div>
+</div>
+
+<div class="overlay" id="pauseOv" hidden>
+  <div class="card">
+    <h2 class="cond">Paused</h2>
+    <p class="tip">The line is stopped and the shift clock is frozen.</p>
+    <button class="cta cond" id="resumeBtn">Resume shift</button>
+  </div>
+</div>
+
+<div class="overlay" id="qOv" hidden>
+  <div class="card alert" role="dialog" aria-modal="true" aria-labelledby="qTitle">
+    <div class="q-head"><span class="q-icon" id="qIcon"></span><div><h2 class="cond" id="qTitle">Station down</h2><span id="qSub">Line stopped. Solve the problem to restart it.</span></div></div>
+    <p class="q-scn" id="qScenario"></p>
+    <p class="q-q" id="qQuestion"></p>
+    <div id="qOpts"></div>
+    <div class="fb" id="qFb" hidden></div>
+    <button class="cta cond" id="qResume" hidden>Restart the line</button>
+  </div>
+</div>
+
+<div class="overlay" id="shiftOv" hidden>
+  <div class="card">
+    <h2 class="cond" id="sTitle">Shift complete</h2>
+    <p id="sLine"></p>
+    <div class="pips" id="sPips"></div>
+    <p class="tip" id="sNext"></p>
+    <button class="cta cond" id="nextBtn">Start next shift</button>
+  </div>
+</div>
+
+<div class="overlay" id="overOv" hidden>
+  <div class="card">
+    <h2 class="cond">Run complete</h2>
+    <div class="pips" id="fPips"></div>
+    <div class="results">
+      <div><b class="cond" id="rMet">0/3</b><span>Targets met</span></div>
+      <div><b class="cond" id="rTotal">0</b><span>Total shipped</span></div>
+      <div><b class="cond" id="rFpy">100%</b><span>First pass yield</span></div>
+      <div><b class="cond" id="rOtd">100%</b><span>Supplier OTD</span></div>
+      <div><b class="cond" id="rQstops">0</b><span>Quality stops</span></div>
+      <div><b class="cond" id="rSolved">0/0</b><span>Solved first try</span></div>
+    </div>
+    <p class="tip" id="rTip"></p>
+    <button class="cta cond" id="againBtn">Start new run</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const CAP = 6, SHIFTS = 3, SHIFT_LEN = 45, PER_TOKEN = 15, WRONG_COST = 3, LOT = 3, FPY_WIN = 20, FPY_MIN = 0.9;
+
+  // ---------- Pictograms ----------
+  const f = n => n.toFixed(2);
+  const poly = pts => pts.map(p=>f(p[0])+","+f(p[1])).join(" ");
+  function sawPts(){
+    const pts=[], n=14, s=2*Math.PI/n;
+    for(let k=0;k<n;k++){ const a=k*s, b=a+s*0.7;
+      pts.push([12+10.5*Math.cos(a),12+10.5*Math.sin(a)]);
+      pts.push([12+7.5*Math.cos(b),12+7.5*Math.sin(b)]); }
+    return poly(pts);
+  }
+  function gearPts(cx,cy,r,t){
+    const pts=[], s=2*Math.PI/t, ri=r*0.74;
+    for(let k=0;k<t;k++){ const a=k*s;
+      [[ri,-.5],[ri,-.27],[r,-.17],[r,.17],[ri,.27]].forEach(([rr,o])=>pts.push([cx+rr*Math.cos(a+o*s),cy+rr*Math.sin(a+o*s)])); }
+    return poly(pts);
+  }
+  const ICON = {
+    Cut:`<svg viewBox="0 0 24 24"><g class="spin"><polygon points="${sawPts()}" fill="currentColor"/><circle cx="12" cy="12" r="2.6" fill="var(--floor)"/></g></svg>`,
+    Weld:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M3 21 L10 14" stroke-width="4"/><path d="M10 14 L14.5 9.5" stroke-width="2.2"/><path d="M12 22 H22" stroke-width="2" opacity=".5"/><g class="spark" stroke="var(--tape)" stroke-width="1.8"><path d="M17 7 L20.5 3.5"/><path d="M17.5 9.5 L22 9.5"/><path d="M15 6 L15 2"/><path d="M18.5 12 L21 14.5"/><path d="M13 5.5 L11 3"/></g></svg>`,
+    Test:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M3 17 A9 9 0 0 1 21 17" stroke-width="2.4"/><path d="M5.2 10.6 L6.8 11.7 M12 8 V9.8 M18.8 10.6 L17.2 11.7" stroke-width="1.8"/><line class="needle" x1="12" y1="17" x2="12" y2="10" stroke="var(--run)" stroke-width="2.4"/><circle cx="12" cy="17" r="2" fill="currentColor" stroke="none"/><path d="M3 21 H21" stroke-width="1.6" opacity=".5"/></svg>`,
+    Supplier:`<svg viewBox="0 0 24 24"><path d="M2 21 V11 L7 14 V11 L12 14 V11 L17 14 V4 H21 V21 Z" fill="currentColor"/><g fill="var(--floor)"><rect x="4" y="16.5" width="2.4" height="2.4"/><rect x="9" y="16.5" width="2.4" height="2.4"/><rect x="14" y="16.5" width="2.4" height="2.4"/></g></svg>`,
+    Quality:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="10" cy="10" r="6.5" stroke-width="2.4"/><path d="M15 15 L21 21" stroke-width="3.2"/><path d="M7.6 7.6 L12.4 12.4 M12.4 7.6 L7.6 12.4" stroke-width="2"/></svg>`
+  };
+  const PART = [
+    `<svg viewBox="0 0 24 24"><rect x="1.5" y="8.5" width="21" height="7" rx="1.5" fill="var(--metal)"/><rect x="2.5" y="9.3" width="19" height="1.8" rx=".9" fill="#fff" opacity=".4"/></svg>`,
+    `<svg viewBox="0 0 24 24"><rect x="2" y="7" width="9" height="10" rx="1" fill="var(--metal)"/><rect x="13" y="7" width="9" height="10" rx="1" fill="var(--metal)"/></svg>`,
+    `<svg viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="15" height="15" rx="1" fill="none" stroke="var(--metal)" stroke-width="3.4"/><g fill="var(--tape)"><circle cx="4.5" cy="4.5" r="1.8"/><circle cx="19.5" cy="4.5" r="1.8"/><circle cx="4.5" cy="19.5" r="1.8"/><circle cx="19.5" cy="19.5" r="1.8"/></g></svg>`
+  ];
+
+  const BASE = [
+    {name:"Cut", ct:1.4, lane:"Bar stock"},
+    {name:"Weld", ct:2.0, lane:"Cut plates"},
+    {name:"Test", ct:1.2, lane:"Welded frames"}
+  ];
+  const SUP_NAME = "Ridgeway Steel";
+
+  // ---------- Question banks ----------
+  const QB = {
+    Cut:[
+      {s:"The saw motor overload tripped for the third time this week.", q:"What is the best first step?",
+       o:[["Reset the overload and restart","Resetting treats the symptom. A repeat failure means an underlying cause is still there. Ask why it keeps happening."],
+          ["Ask 5 Whys to find the root cause",""],
+          ["Replace the motor","That is an expensive guess without evidence. Understand the cause before spending money."],
+          ["Run the saw slower for the rest of the shift","A workaround cuts throughput and leaves the cause in place. Look for the reason behind the repeats."]],
+       a:1, why:"Repeat trips point to a hidden cause such as a dull blade, high feed rate or poor lubrication. Asking why until you reach the root cause stops the repeat."},
+      {s:"The operator spent 20 minutes hunting for a replacement blade.", q:"Which lean tool prevents this?",
+       o:[["Takt time","Takt sets the pace of production to customer demand. It does not help anyone find a tool. Think about workplace organization."],
+          ["5S",""],
+          ["Heijunka","Heijunka levels the product mix over time. The problem here is where things are kept."],
+          ["Value stream mapping","A VSM shows flow across the whole process, but the fix here is at the workstation itself."]],
+       a:1, why:"5S, especially Set in order, gives every tool a labeled home at the point of use, so searching time disappears."},
+      {s:"Blade changes take 25 minutes and the line stands still the whole time.", q:"Which method cuts changeover time?",
+       o:[["Poka-yoke","Mistake-proofing prevents errors, but this problem is the length of the changeover."],
+          ["Gemba walk","Going to see is a good start, but you need a specific method to shorten setups."],
+          ["SMED",""],
+          ["Pareto chart","A Pareto ranks causes. You already know the cause: a long setup. Look for a setup-reduction method."]],
+       a:2, why:"SMED separates setup work done while the machine runs (external) from work that needs it stopped (internal), then converts and streamlines it."},
+      {s:"Cut lengths started drifting and the saw auto-stopped on a tolerance alarm.", q:"What tells you whether the process has gone out of control?",
+       o:[["A control chart",""],
+          ["A spaghetti diagram","That maps movement of people or material, not process stability."],
+          ["A fishbone diagram","A fishbone helps brainstorm causes, but first confirm whether this is special-cause variation."],
+          ["A 5S audit","An audit checks workplace organization, not process variation over time."]],
+       a:0, why:"A control chart shows whether variation is normal (common cause) or a signal that something changed (special cause), so you know when to act."}
+    ],
+    Weld:[
+      {s:"The wire feed jammed again. Operators say jams happen all the time.", q:"How do you find which jam type causes the most downtime?",
+       o:[["Run the line faster to make up time","Speeding up hides the problem and adds risk. Start by measuring which jams matter most."],
+          ["A Pareto chart",""],
+          ["A Gantt chart","A Gantt plans tasks over time. You need to rank causes by impact."],
+          ["Ask operators to try harder","Effort does not remove a process cause. Collect data on the jam types first."]],
+       a:1, why:"A Pareto chart ranks causes by frequency or downtime. Usually a few causes drive most losses, so you fix those first."},
+      {s:"A wrong-size nozzle was fitted and the weld cell faulted.", q:"What is the best way to make this mistake impossible?",
+       o:[["Retrain the operator and post a sign","Training helps, but it still relies on memory. Aim for a design that physically prevents the error."],
+          ["Add a final inspection","Inspection finds the defect after it happens. Look for prevention at the source."],
+          ["Poka-yoke, such as keyed nozzle fittings",""],
+          ["Write up the operator","Blame does not fix the system. Most errors come from the process, not the person."]],
+       a:2, why:"Poka-yoke designs the error out, for example nozzles that only fit the correct holder, so the mistake cannot happen."},
+      {s:"The torch tip wore out unexpectedly in the middle of the shift.", q:"Which approach stops surprise failures like this?",
+       o:[["Run it until it fails, then fix it","Run-to-failure guarantees unplanned stops. Think about planned care."],
+          ["Increase the buffer in front of Weld","More inventory hides the failure instead of preventing it."],
+          ["Total Productive Maintenance with operator checks",""],
+          ["Buy a second welder","That is costly and the new one will wear out too. Prevent the failure instead."]],
+       a:2, why:"TPM has operators clean, inspect and replace wear parts on a schedule, so failures are caught before they stop the line."},
+      {s:"The weld cell stopped and nobody noticed for 10 minutes.", q:"What makes abnormalities visible immediately?",
+       o:[["A monthly downtime report","Reports arrive too late to react. You need a real-time signal."],
+          ["An andon signal",""],
+          ["A bigger buffer after Weld","A buffer delays the impact, which makes the stop even harder to notice."],
+          ["MRP scheduling","MRP plans material. It does not signal a stopped machine on the floor."]],
+       a:1, why:"An andon light or call system signals a problem the moment it happens, so help arrives fast and downtime stays short."}
+    ],
+    Test:[
+      {s:"The tester stopped after three units failed the same leak test.", q:"What is the first action?",
+       o:[["Retest until they pass","Retesting until a pass hides real defects from the customer."],
+          ["Contain: quarantine suspect units",""],
+          ["Ship them and fix any field returns","That pushes the defect to the customer, the costliest place to find it."],
+          ["Widen the test limits","Changing limits without engineering evidence ships risk."]],
+       a:1, why:"Containment comes first: isolate suspect units so no defect escapes, then investigate the root cause."},
+      {s:"Two operators get different readings from the same gauge on the same part.", q:"Which study checks the measurement system?",
+       o:[["A time study","A time study measures how long work takes, not measurement accuracy."],
+          ["A takt time calculation","Takt relates to demand rate, not gauge reliability."],
+          ["Gage R&R",""],
+          ["A value stream map","A VSM shows process flow, not measurement variation."]],
+       a:2, why:"Gage R&R measures repeatability and reproducibility, so you know whether variation comes from the parts or from the measurement."},
+      {s:"The tester faults intermittently. The cause could be people, machine, material or method.", q:"Which tool organizes the possible causes?",
+       o:[["A fishbone (Ishikawa) diagram",""],
+          ["A kanban board","Kanban manages workflow, not cause analysis."],
+          ["SMED","SMED reduces changeovers. You need to structure possible causes."],
+          ["A control chart","A control chart tracks stability over time. To brainstorm causes by category, use another tool."]],
+       a:0, why:"A fishbone diagram groups possible causes into categories such as people, machine, material and method, so the team checks each one systematically."},
+      {s:"The same tester fault keeps coming back after every fix.", q:"How do you make the fix stick?",
+       o:[["Tell the team to be more careful","Reminders fade. Build the fix into how work is done."],
+          ["Add an extra inspector","Inspection catches problems but does not prevent the cause from returning."],
+          ["Update standard work and verify with data",""],
+          ["Fix it again when it fails","Repeated fixes mean the root cause or the control is missing."]],
+       a:2, why:"Locking the fix into standard work and monitoring results, the Control step in DMAIC, keeps the gain from slipping back."}
+    ],
+    Supplier:[
+      {s:"The supplier cancelled today's deliveries. Their only furnace is down, and they are your single source for this steel.", q:"What reduces this risk in the long term?",
+       o:[["Order six months of stock as a buffer","That ties up cash and space, and the risk returns when the stock runs out."],
+          ["Qualify a second source for critical material",""],
+          ["Threaten the supplier with penalties","Penalties do not restart a furnace. The exposure is having only one source."],
+          ["Wait it out and expedite later","Waiting leaves you exposed to the next outage too."]],
+       a:1, why:"Dual sourcing critical material, with both suppliers qualified, keeps the line running when one supplier fails."},
+      {s:"The supplier put shipments on hold after your complaint about cracked bar stock.", q:"Which structured response should you require from the supplier?",
+       o:[["A credit note for the bad material","Money covers the cost, not the cause. The cracks will come back."],
+          ["An 8D corrective action report",""],
+          ["Replacement stock with no analysis","Without root cause, the next lot may crack too."],
+          ["A promise to inspect harder","Inspection catches defects but does not prevent them. Ask for a structured root-cause method."]],
+       a:1, why:"An 8D requires containment, root cause, permanent corrective action and verification, so the defect is fixed at the source."},
+      {s:"A new supplier part is due in production, but shipping stopped because approval is missing.", q:"Which process confirms the supplier can produce to spec before volume?",
+       o:[["A purchase order","A PO commits to buy. It does not prove the process can make good parts."],
+          ["An annual supplier audit","Audits help, but part-specific approval is needed before launch."],
+          ["PPAP",""],
+          ["A non-disclosure agreement","An NDA protects information, not quality."]],
+       a:2, why:"PPAP shows with evidence such as dimensional results, capability studies and a control plan that the supplier's process consistently meets your requirements."},
+      {s:"Deliveries from this supplier keep slipping, and you have no data comparing them with other suppliers.", q:"What gives an objective view of supplier performance?",
+       o:[["The buyer's gut feeling","Opinions vary from person to person. You need consistent measures."],
+          ["A supplier scorecard with OTD, quality PPM and responsiveness",""],
+          ["A ranking by lowest price","Price alone ignores the cost of late and defective deliveries."],
+          ["Counting complaint emails","Email volume is a noisy signal, not a performance measure."]],
+       a:1, why:"A scorecard tracks on-time delivery, defect rate and responsiveness over time, so reviews are based on facts and improvement targets are clear."},
+      {s:"Deliveries stopped because the supplier never got a signal that you were running low.", q:"What links replenishment to actual consumption?",
+       o:[["An annual forecast","Forecasts drift from real use. You need a consumption signal."],
+          ["Bigger safety stock","More stock delays the problem and costs money."],
+          ["A supplier kanban or vendor-managed inventory",""],
+          ["Expediting every time you run low","Expediting is costly firefighting, not a system."]],
+       a:2, why:"A supplier kanban or VMI sends a pull signal as material is used, so the supplier replenishes before you run out."}
+    ],
+    Quality:[
+      {s:"FPY fell below 90%. Most of the scrap came right after a setup change.", q:"What prevents bad parts after setups?",
+       o:[["Add more final inspection","Final inspection finds bad parts after the cost is spent. Prevent them at the start."],
+          ["First-piece verification before the run",""],
+          ["Run extra parts to make up the losses","Making more hides the waste and burns material."],
+          ["Accept it as normal startup loss","Treating scrap as normal stops improvement. It has a cause."]],
+       a:1, why:"Checking the first part against spec after every setup catches a bad setup before it produces a batch of scrap."},
+      {s:"FPY fell below 90%, and you have scrap data by defect type.", q:"What is the best first analysis?",
+       o:[["Look only at the average scrap trend","An average hides which defect matters most. Break it down."],
+          ["A Pareto chart by defect type",""],
+          ["Rework every part you can","Rework adds cost and does not tell you why defects happen."],
+          ["Ask which operator made the scrap","Starting with blame misses process causes and kills reporting."]],
+       a:1, why:"A Pareto by defect type shows the vital few defects causing most of the loss, so effort goes where it matters most."},
+      {s:"FPY is below 90%, yet the final yield report says 98%.", q:"Why do the numbers differ?",
+       o:[["FPY ignores scrap","FPY includes scrap. Think about what final yield leaves out."],
+          ["FPY counts only units right the first time, exposing hidden rework",""],
+          ["Final yield is the stricter measure","Final yield counts reworked units as good, so it looks better, not stricter."],
+          ["They measure the same thing","They differ in how they treat rework."]],
+       a:1, why:"Final yield counts reworked units as good. FPY counts only units made right first time, so it reveals the hidden factory of rework."},
+      {s:"FPY dropped below 90% and the defects trace to a batch of incoming steel.", q:"What is the right response?",
+       o:[["Switch suppliers immediately","An abrupt switch adds new risk. First contain the problem and require a fix."],
+          ["Scrap the bad parts and move on","The next lot may be just as bad. The supplier must fix the cause."],
+          ["Contain remaining stock and issue a supplier corrective action",""],
+          ["Tighten your own process to compensate","You cannot process your way out of bad material."]],
+       a:2, why:"Quarantine suspect stock, then require the supplier to find and fix the root cause through a corrective action such as an 8D."},
+      {s:"FPY is below 90%. The process is stable but centered off target.", q:"Which metric tells you if the process can meet the spec?",
+       o:[["OEE","OEE measures equipment effectiveness, not ability to meet spec."],
+          ["Takt time","Takt sets the pace to demand, not quality capability."],
+          ["Cpk",""],
+          ["Lead time","Lead time measures speed, not conformance."]],
+       a:2, why:"Cpk compares process spread and centering to the spec limits. An off-center process has low Cpk even when it is stable."}
+    ]
+  };
+
+  const $ = id => document.getElementById(id);
+  const line = $("line");
+  let C, S, Q=null, running=false, last=0, kaizenMode=false, toastTimer=null;
+
+  // ---------- Build DOM ----------
+  const zone = k => k<3?"":(k<5?"z2":"z3");
+  const sup=document.createElement("button");
+  sup.className="station supplier";
+  sup.innerHTML=`<span class="st-icon">${ICON.Supplier}</span><span class="st-head"><span class="st-name cond">Supplier</span><span class="st-ct" id="supCt"></span></span><span class="andon" aria-hidden="true"><i class="r"></i><i class="a"></i><i class="g"></i></span><span class="st-status" id="supStatus"></span><span class="st-bar"><i id="supBar"></i></span>`;
+  sup.addEventListener("click", tapSupplier);
+  line.appendChild(sup);
+
+  const laneEls=[], stEls=[];
+  BASE.forEach((b,i)=>{
+    const lane=document.createElement("div");
+    lane.className="lane";
+    let slots=""; for(let k=0;k<CAP;k++) slots+=`<span class="slot ${zone(k)}">${PART[i]}</span>`;
+    lane.innerHTML=`<span class="lane-label">${b.lane}</span><div class="belt">${slots}</div><span class="kb cond"><span class="kbn">0/6</span><small>kanban</small></span>`;
+    line.appendChild(lane); laneEls.push(lane);
+
+    const st=document.createElement("button");
+    st.className="station";
+    st.innerHTML=`<span class="st-icon">${ICON[b.name]}</span><span class="st-head"><span class="st-name cond">${b.name}</span><span class="st-ct"></span></span><span class="andon" aria-hidden="true"><i class="r"></i><i class="a"></i><i class="g"></i></span><span class="st-status"></span><span class="st-bar"><i></i></span>`;
+    st.addEventListener("click",()=>tapStation(i));
+    line.appendChild(st); stEls.push(st);
+  });
+  const dock=document.createElement("div");
+  dock.className="dock";
+  dock.innerHTML=`<svg viewBox="0 0 40 24"><rect x="1" y="3" width="24" height="15" rx="1.5" fill="var(--slot)"/><rect id="truckFill" x="1" y="3" width="24" height="15" rx="1.5" fill="var(--box)" style="transform-origin:1px 0;transform:scaleX(0)"/><rect x="1" y="3" width="24" height="15" rx="1.5" fill="none" stroke="var(--steel)" stroke-width="1.6"/><path d="M26 7 H32 L37 12 V18 H26 Z" fill="var(--steel)"/><rect x="28.5" y="8.5" width="3.8" height="3.5" fill="var(--panel)"/><circle cx="8" cy="19.5" r="3" fill="var(--ink)"/><circle cx="31" cy="19.5" r="3" fill="var(--ink)"/></svg><span class="dock-text"><b id="dockLoad">Truck empty</b><br><span id="rate">0 per min</span></span>`;
+  line.appendChild(dock);
+
+  $("legend").innerHTML = `
+    <span class="ico" style="color:var(--steel)">${ICON.Supplier}</span><span>${SUP_NAME} delivers bar stock in lots of ${LOT}. Late lots show amber: tap to expedite. A red supplier has stopped shipping: tap and solve the problem.</span>
+    <span class="ico"><span class="dot" style="background:var(--stop)"></span></span><span>Red station is down. Tap it and answer a problem-solving question to restart. A wrong answer costs 3 s; a first-try answer earns a kaizen point.</span>
+    <span class="ico"><span class="dot" style="background:var(--warn)"></span></span><span>Amber station is making scrap. Tap once to fix. Red bars in the stock lane are bad material that will scrap at Cut.</span>
+    <span class="ico" style="color:var(--stop)">${ICON.Quality}</span><span>If FPY over the last 20 units falls below 90%, quality stops the line until you answer correctly.</span>
+    <span class="ico"><span class="kb cond" style="min-width:28px;font-size:.75rem">6/6</span></span><span>Kanban tags show each queue against its limit. Every 15 parts shipped earns a kaizen point that cuts a station's cycle time by 20%.</span>`;
+
+  function makePips(el, highlightNow){
+    let h=""; for(let k=0;k<SHIFTS;k++){
+      const r=C.results[k]; let cls="pip";
+      if(r) cls+=r.met?" met":" miss"; else if(highlightNow && k===C.shift-1) cls+=" now";
+      h+=`<i class="${cls}"></i>`; }
+    el.innerHTML=h;
+  }
+
+  // ---------- State ----------
+  const supInterval = sh => [6,4.5,3.6][sh-1] || 3.6;
+  const target = sh => [15,20,26][sh-1] || 26;
+  const issueRate = sh => [0.02,0.025,0.03][sh-1] || 0.03;
+  const supIssueChance = sh => [0.25,0.3,0.35][sh-1] || 0.35;
+  function best(){ try{ return +localStorage.getItem("kaizenLineBest3")||0 }catch(e){ return 0 } }
+  function saveBest(v){ try{ localStorage.setItem("kaizenLineBest3",String(v)) }catch(e){} }
+
+  function newRun(){
+    C={shift:1, results:[], total:0, scrap:0, tokens:0, tokensEarned:0, cts:BASE.map(b=>b.ct),
+       asked:0, firstTry:0, qstops:0, del:0, onTime:0, used:{Cut:[],Weld:[],Test:[],Supplier:[],Quality:[]}};
+    prepShift();
+  }
+  function prepShift(){
+    S={t:0, left:SHIFT_LEN, shipped:0, raw:[false,false,false], bufs:[0,0,0], win:[],
+       sup:{next:2, total:2, status:"ok", pendingBad:0},
+       st:BASE.map((b,i)=>({name:b.name, ct:C.cts[i], prog:0, busy:false, holding:false, bad:false, issue:null, status:"Waiting for parts"}))};
+    kaizenMode=false;
+    render();
+  }
+  const count = i => i===0 ? S.raw.length : S.bufs[i];
+  const winFpy = () => S.win.length ? S.win.reduce((a,b)=>a+b,0)/S.win.length : 1;
+
+  function toast(msg){
+    const t=$("toast"); t.textContent=msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2600);
+  }
+  function flash(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+  // ---------- Supplier ----------
+  function scheduleNext(){
+    const sp=S.sup; sp.status="ok"; sp.pendingBad=0;
+    sp.next=sp.total=supInterval(C.shift);
+    if(S.t>3 && Math.random()<supIssueChance(C.shift)){
+      const r=Math.random();
+      if(r<0.45){ sp.status="late"; sp.next+=6; sp.total=sp.next; }
+      else if(r<0.75){ sp.pendingBad=2; }
+      else { sp.status="down"; }
+    }
+  }
+  function deliver(expedited){
+    const sp=S.sup;
+    C.del++; if(sp.status==="ok") C.onTime++;
+    const bad=sp.pendingBad;
+    for(let k=0;k<LOT;k++){ if(S.raw.length<CAP) S.raw.push(k>=LOT-bad); }
+    if(bad) toast("Lot arrived with bad material (red bars). Expect scrap at Cut.");
+    else if(expedited) toast("Expedited with premium freight. It still counts as a late delivery.");
+    flash(sup,"deliver");
+    scheduleNext();
+  }
+  function updateSupplier(dt){
+    const sp=S.sup;
+    if(sp.status==="down") return;
+    sp.next-=dt;
+    if(sp.next<=0) deliver(false);
+  }
+  function tapSupplier(){
+    if(!running) return;
+    if(kaizenMode){ toast("Kaizen points improve your own stations. Choose Cut, Weld or Test."); return; }
+    if(S.sup.status==="down") openQuiz("Supplier");
+    else if(S.sup.status==="late") deliver(true);
+  }
+
+  // ---------- Line ----------
+  function record(good){
+    S.win.push(good?1:0); if(S.win.length>FPY_WIN) S.win.shift();
+    if(running && !Q && S.win.length>=10 && winFpy()<FPY_MIN){ C.qstops++; openQuiz("Quality"); }
+  }
+  function update(dt){
+    S.t+=dt; S.left-=dt;
+    if(S.left<=0){ S.left=0; endShift(); return; }
+    updateSupplier(dt);
+    const active=S.st.filter(s=>s.issue).length;
+    for(let i=S.st.length-1;i>=0;i--){
+      if(!running) return;
+      const s=S.st[i];
+      if(!s.issue && S.t>6 && active<2 && Math.random()<issueRate(C.shift)*dt){
+        s.issue = Math.random()<0.6 ? "down" : "defect";
+      }
+      if(s.issue==="down"){ s.status="Down. Tap to diagnose and restart"; continue; }
+      if(s.holding && !tryOutput(i)){ s.status="Blocked. Next queue is full"; continue; }
+      if(!s.busy){
+        if(count(i)>0){
+          if(i===0) s.bad=S.raw.shift(); else { S.bufs[i]--; s.bad=false; }
+          s.busy=true; s.prog=0;
+        } else { s.status = i===0 ? "Starved. Waiting for supplier" : "Starved. Waiting for parts"; continue; }
+      }
+      s.prog+=dt/s.ct;
+      s.status = s.issue==="defect" ? "Making scrap. Tap to fix" : (s.bad ? "Cutting bad material" : "Running");
+      if(s.prog>=1){
+        s.busy=false; s.prog=0;
+        if(s.issue==="defect" || s.bad){
+          s.bad=false; C.scrap++; flash(stEls[i],"scrap-flash"); record(false);
+        } else { s.holding=true; tryOutput(i); }
+      }
+    }
+  }
+  function tryOutput(i){
+    const s=S.st[i];
+    if(i===S.st.length-1){ s.holding=false; ship(); return true; }
+    if(S.bufs[i+1]<CAP){ S.bufs[i+1]++; s.holding=false; return true; }
+    return false;
+  }
+  function ship(){
+    S.shipped++; C.total++;
+    if(S.shipped===S.target) toast("Target hit. Extra units still count toward your total.");
+    const earned=Math.floor(C.total/PER_TOKEN);
+    if(earned>C.tokensEarned){ C.tokens+=earned-C.tokensEarned; C.tokensEarned=earned; }
+    record(true);
+  }
+  function tapStation(i){
+    if(!running) return;
+    const s=S.st[i];
+    if(kaizenMode){
+      if(s.ct<=0.5){ toast(`${s.name} is already at its fastest`); return; }
+      s.ct=Math.max(0.5,+(s.ct*0.8).toFixed(2)); C.cts[i]=s.ct;
+      C.tokens--; kaizenMode=false;
+      toast(`${s.name} cycle time is now ${s.ct.toFixed(1)} s`);
+      render(); return;
+    }
+    if(s.issue==="down"){ openQuiz(s.name, i); return; }
+    if(s.issue==="defect") s.issue=null;
+    render();
+  }
+
+  // ---------- Questions ----------
+  function shuffle(a){ for(let k=a.length-1;k>0;k--){ const j=Math.floor(Math.random()*(k+1)); [a[k],a[j]]=[a[j],a[k]]; } return a; }
+  function openQuiz(kind, i){
+    running=false; kaizenMode=false; render();
+    const bank=QB[kind];
+    let pool=bank.map((_,k)=>k).filter(k=>!C.used[kind].includes(k));
+    if(!pool.length){ C.used[kind]=[]; pool=bank.map((_,k)=>k); }
+    const k=pool[Math.floor(Math.random()*pool.length)]; C.used[kind].push(k);
+    Q={kind, i, item:bank[k], wrong:0}; C.asked++;
+    $("qIcon").innerHTML=ICON[kind];
+    if(kind==="Quality"){
+      $("qTitle").textContent=`Quality stop: FPY ${Math.round(winFpy()*100)}%`;
+      $("qSub").textContent="First pass yield fell below 90%. Solve the problem to restart the line.";
+    } else if(kind==="Supplier"){
+      $("qTitle").textContent="Supplier stopped";
+      $("qSub").textContent=`${SUP_NAME} is not shipping. Solve the problem to restore supply.`;
+    } else {
+      $("qTitle").textContent=`${kind} is down`;
+      $("qSub").textContent="Line stopped. Solve the problem to restart it.";
+    }
+    $("qScenario").textContent=Q.item.s;
+    $("qQuestion").textContent=Q.item.q;
+    const box=$("qOpts"); box.innerHTML="";
+    shuffle(Q.item.o.map((_,j)=>j)).forEach(j=>{
+      const b=document.createElement("button");
+      b.className="opt"; b.textContent=Q.item.o[j][0];
+      b.addEventListener("click",()=>answer(j,b));
+      box.appendChild(b);
+    });
+    $("qFb").hidden=true; $("qResume").hidden=true;
+    $("qResume").textContent = kind==="Supplier" ? "Restore supply" : "Restart the line";
+    $("qOv").hidden=false; $("qOv").scrollTop=0;
+  }
+  function answer(j,btn){
+    const fb=$("qFb");
+    if(j===Q.item.a){
+      btn.classList.add("right");
+      $("qOpts").querySelectorAll(".opt").forEach(b=>b.disabled=true);
+      let bonus="";
+      if(Q.wrong===0){ C.firstTry++; C.tokens++; bonus=`<span class="bonus">Solved first try: +1 kaizen point</span>`; }
+      fb.className="fb ok"; fb.innerHTML=`<b>Correct</b>${Q.item.why}${bonus}`;
+      $("qResume").hidden=false; $("qResume").focus();
+    } else {
+      Q.wrong++; btn.classList.add("wrong"); btn.disabled=true;
+      S.left=Math.max(1,S.left-WRONG_COST);
+      if(navigator.vibrate) navigator.vibrate(60);
+      fb.className="fb"; fb.innerHTML=`<b>Not quite</b>${Q.item.o[j][1]}<span class="cost">Downtime +${WRONG_COST} s. Try another answer.</span>`;
+      render();
+    }
+    fb.hidden=false;
+    fb.scrollIntoView({block:"nearest",behavior:"smooth"});
+  }
+  $("qResume").addEventListener("click",()=>{
+    const q=Q; Q=null;
+    if(q.kind==="Quality"){
+      S.win=[];
+      S.st.forEach(s=>{ if(s.issue==="defect") s.issue=null; });
+      const bad=S.raw.filter(x=>x).length;
+      S.raw=S.raw.filter(x=>!x);
+      toast(bad?`Contained: ${bad} bad bar${bad>1?"s":""} quarantined, defects cleared.`:"Contained: defects cleared and FPY reset.");
+    } else if(q.kind==="Supplier"){
+      deliver(false);
+      toast("Supply restored. The delayed lot has arrived.");
+    } else {
+      S.st[q.i].issue=null;
+      toast("Line restarted");
+    }
+    go();
+  });
+
+  // ---------- Render ----------
+  function render(){
+    $("shiftLabel").textContent=`Shift ${C.shift} of ${SHIFTS}`;
+    makePips($("pips"), true);
+    const sec=Math.ceil(S.left);
+    const tm=$("timer"); tm.textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+    tm.classList.toggle("low", sec<=10);
+    S.target = target(C.shift);
+    const pct=Math.min(1,S.shipped/S.target);
+    $("qFill").style.transform=`scaleX(${pct})`;
+    $("quota").classList.toggle("done", S.shipped>=S.target);
+    $("qText").textContent=`${S.shipped} of ${S.target} shipped this shift`;
+    const fp=winFpy();
+    $("fpy").textContent=Math.round(fp*100)+"%";
+    $("fpyBox").classList.toggle("bad", fp<FPY_MIN);
+    const otd = C.del ? C.onTime/C.del : 1;
+    $("otd").textContent=Math.round(otd*100)+"%";
+    $("otdBox").classList.toggle("bad", otd<0.9);
+    $("truckFill").style.transform=`scaleX(${pct})`;
+    $("dockLoad").textContent = S.shipped ? `${S.shipped} boxes loaded` : "Truck empty";
+    $("rate").textContent=(S.t>5?Math.round(S.shipped/(S.t/60)):0)+" per min";
+
+    // supplier
+    const sp=S.sup;
+    sup.classList.toggle("ok", running && sp.status==="ok");
+    sup.classList.toggle("late", sp.status==="late");
+    sup.classList.toggle("down", sp.status==="down");
+    sup.classList.toggle("pick", false);
+    $("supCt").textContent = sp.status==="down" ? SUP_NAME : `Lot of ${LOT} in ${Math.max(0,Math.ceil(sp.next))} s`;
+    $("supStatus").textContent = sp.status==="down" ? "Stopped shipping. Tap to resolve"
+      : sp.status==="late" ? "Late delivery. Tap to expedite" : `${SUP_NAME}, on schedule`;
+    $("supBar").style.transform = `scaleX(${sp.status==="down"?0:Math.min(1,1-sp.next/sp.total)})`;
+
+    for(let i=0;i<BASE.length;i++){
+      const n=count(i), lane=laneEls[i];
+      lane.querySelectorAll(".slot").forEach((sl,k)=>{
+        sl.classList.toggle("on",k<n);
+        sl.classList.toggle("bad", i===0 && k<n && S.raw[k]);
+      });
+      const kb=lane.querySelector(".kb");
+      kb.querySelector(".kbn").textContent=`${n}/${CAP}`;
+      kb.classList.toggle("z2", n>=4 && n<CAP);
+      kb.classList.toggle("z3", n>=CAP);
+      const s=S.st[i];
+      lane.classList.toggle("moving", running && n>0 && !s.issue && !s.holding);
+    }
+    S.st.forEach((s,i)=>{
+      const el=stEls[i];
+      el.classList.toggle("down", s.issue==="down");
+      el.classList.toggle("defect", s.issue==="defect" || (s.busy && s.bad));
+      el.classList.toggle("run", running && !s.issue && s.busy);
+      el.classList.toggle("pick", kaizenMode);
+      el.querySelector(".st-ct").textContent=s.ct.toFixed(1)+" s cycle";
+      el.querySelector(".st-bar i").style.transform=`scaleX(${s.busy?Math.min(1,s.prog):(s.holding?1:0)})`;
+      el.querySelector(".st-status").textContent= kaizenMode?"Tap to cut cycle time by 20%":s.status;
+      el.setAttribute("aria-label",`${s.name}, cycle time ${s.ct.toFixed(1)} seconds, ${s.status}`);
+    });
+    const kbtn=$("kaizenBtn");
+    kbtn.disabled = C.tokens<=0 && !kaizenMode;
+    kbtn.classList.toggle("active",kaizenMode);
+    kbtn.textContent = kaizenMode?"Choose a station to improve":`Kaizen points: ${C.tokens}`;
+  }
+
+  function loop(ts){
+    if(!running) return;
+    const dt=Math.min(0.1,(ts-last)/1000); last=ts;
+    update(dt);
+    if(running) render();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- Flow ----------
+  function go(){
+    ["startOv","shiftOv","overOv","pauseOv","qOv"].forEach(id=>$(id).hidden=true);
+    running=true; last=performance.now(); render();
+    requestAnimationFrame(loop);
+  }
+  function pause(){
+    if(!running) return;
+    running=false; kaizenMode=false; render();
+    $("pauseOv").hidden=false;
+  }
+  function endShift(){
+    running=false; kaizenMode=false;
+    const met = S.shipped>=S.target;
+    C.results.push({shipped:S.shipped, target:S.target, met});
+    render();
+    if(C.shift>=SHIFTS){ finish(); return; }
+    const n=C.shift, nx=n+1;
+    $("sTitle").textContent = met?`Shift ${n} complete`:`Shift ${n} missed target`;
+    $("sLine").textContent = `You shipped ${S.shipped} against a target of ${S.target}.`;
+    makePips($("sPips"), false);
+    $("sNext").textContent=`Next shift: target ${target(nx)}, supplier lots every ${supInterval(nx).toFixed(1)} s. You have ${C.tokens} kaizen point${C.tokens===1?"":"s"} to spend during the shift.`;
+    $("nextBtn").textContent=`Start shift ${nx}`;
+    $("shiftOv").hidden=false;
+  }
+  function finish(){
+    const met=C.results.filter(r=>r.met).length;
+    const b=Math.max(best(),C.total); saveBest(b);
+    makePips($("fPips"), false);
+    $("rMet").textContent=`${met}/${SHIFTS}`;
+    $("rTotal").textContent=C.total;
+    const tot=C.total+C.scrap;
+    $("rFpy").textContent= tot?Math.round(100*C.total/tot)+"%":"100%";
+    $("rOtd").textContent= C.del?Math.round(100*C.onTime/C.del)+"%":"100%";
+    $("rQstops").textContent=C.qstops;
+    $("rSolved").textContent=`${C.firstTry}/${C.asked}`;
+    let slow=0; C.cts.forEach((c,i)=>{ if(c>C.cts[slow]) slow=i; });
+    $("rTip").textContent=`Best run: ${b} shipped. Your bottleneck finished at ${C.cts[slow].toFixed(1)} s (${BASE[slow].name}). The line can never ship faster than its slowest step, and that includes your supplier.`;
+    $("overOv").hidden=false;
+  }
+
+  $("startBtn").addEventListener("click",()=>{ newRun(); go(); });
+  $("againBtn").addEventListener("click",()=>{ newRun(); go(); });
+  $("nextBtn").addEventListener("click",()=>{ C.shift++; prepShift(); go(); });
+  $("resumeBtn").addEventListener("click",go);
+  $("pauseBtn").addEventListener("click",pause);
+  $("kaizenBtn").addEventListener("click",()=>{
+    if(!running) return;
+    if(kaizenMode) kaizenMode=false; else if(C.tokens>0) kaizenMode=true;
+    render();
+  });
+  document.addEventListener("visibilitychange",()=>{ if(document.hidden) pause(); });
+
+  newRun();
+})();
+</script>
+</body>
+</html>
